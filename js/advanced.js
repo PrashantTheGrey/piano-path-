@@ -322,7 +322,7 @@
     const view = scoreView(api.root.querySelector('#sa-staff'), { clef: nums ? 'grand' : 'treble', fifths: K.fifths, time: [bpb, 4], events, barEnds, beatW: 26, label: 'Sight-reading piece' });
     const playable = view.sc.playable;
     const status = api.root.querySelector('#perf-status');
-    let run = null, stepOff = null;
+    let run = null, stepOff = null, tried = false;
     api.Keys.focus(playable[0].midi);
     const start = () => {
       if (run) return;
@@ -333,10 +333,13 @@
         events: playable.map((e) => ({ beat: e.beat, dur: e.beats, midi: e.midi })), bpm, beatsPerBar: bpb, countIn: bpb, pitched: true,
         onCursor: (b) => { if (b < 0) { status.textContent = 'Count-in: ' + Math.ceil(-b); view.cursor(null); } else { status.textContent = 'Play!'; view.cursor(b); } },
         onMark: (n, s) => view.mark(n, s),
+        onReset: () => view.clear(),
         onDone: (res) => {
           run = null; view.cursor(null); status.textContent = ''; api.setActionsDisabled(false);
-          api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: `Score ${Math.round(res.score * 100)}%. ${res.summary}${dyn ? dynamicsNote(res.notes, dyn) : ''}` });
-          api.actions([{ label: 'Practise it slowly (no clock)', fn: () => {
+          const note = `${Math.round(res.score * 100)}%. ${res.summary}${dyn ? dynamicsNote(res.notes, dyn) : ''}`;
+          if (!tried) { tried = true; api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: 'Score ' + note }); }
+          else api.say(`Practice run: ${note} (Your first try is the one that counts.)`, res.score >= 0.85 ? 'good' : 'bad');
+          api.actions([{ label: 'Try again with the click', primary: true, fn: start }, { label: 'Practise it slowly (no clock)', fn: () => {
             if (stepOff) stepOff();
             stepOff = stepMode(api, view, playable, view.sc.slice, () => api.say('Nice. Press Next for a new piece.', 'good'));
             api.say('Slow practice: play each note or chord when you’re ready. This doesn’t change your score.', 'info');
@@ -440,7 +443,7 @@
       const boxes = () => api.root.querySelectorAll('.lbar');
       const status = api.root.querySelector('#perf-status');
       const reveal = (i) => { const b = boxes()[i]; b.querySelector('.lsym').textContent = chords[i].sym; b.querySelector('.lnum').textContent = chords[i].n; };
-      let run = null;
+      let run = null, tried = false;
       const go = (listen) => {
         if (run) return;
         api.setActionsDisabled(true);
@@ -458,8 +461,10 @@
             boxes().forEach((x) => x.classList.remove('cur'));
             if (listen) return;
             chords.forEach((_, i) => reveal(i));
-            api.finish({ correct: score >= 0.75, score, manual: true, note: `${Math.round(score * chords.length)} of ${chords.length} chords on time. The progression: ${chords.map((c) => `${c.n} (${c.sym})`).join(' – ')}.` });
-            api.actions([{ label: 'Hear it with the chords', fn: () => go(true) }]);
+            const note = `${Math.round(score * chords.length)} of ${chords.length} chords on time. The progression: ${chords.map((c) => `${c.n} (${c.sym})`).join(' – ')}.`;
+            if (!tried) { tried = true; api.finish({ correct: score >= 0.75, score, manual: true, note }); }
+            else api.say(`Practice run: ${note} (Your first try is the one that counts.)`, score >= 0.75 ? 'good' : 'bad');
+            api.actions([{ label: 'Try again with the click', primary: true, fn: () => go(false) }, { label: 'Hear it with the chords', fn: () => go(true) }]);
           },
         });
       };
@@ -692,6 +697,7 @@
           bpm, beatsPerBar: p.bpb, countIn: p.bpb, pitched: true, clickEvery: p.time[1] === 8 && p.time[0] % 3 === 0 ? 1.5 : 1,
           onCursor: (b) => { if (b < 0) { status.textContent = 'Count-in: ' + Math.ceil(-b); view.cursor(null); } else { status.textContent = 'Play!'; view.cursor(b + r.rs); } },
           onMark: (i, s) => view.mark(r.sel[i].gi, s),
+          onReset: () => view.clear(),
           onDone: (res) => {
             run = null; view.cursor(null); status.textContent = ''; api.setActionsDisabled(false);
             const pct = Math.round(res.score * 100);

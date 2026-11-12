@@ -770,6 +770,7 @@
           else { statusEl.textContent = 'Play!'; opts.cursor(b); }
         },
         onMark: (i, st) => opts.mark(i, st),
+        onReset: () => opts.reset && opts.reset(),
         onDone: (r) => { run = null; opts.cursor(null); api.setActionsDisabled(false); statusEl.textContent = ''; opts.onDone(r); },
       });
     };
@@ -815,10 +816,12 @@
         mark: (i, s) => { if (i !== null && noteEls[i]) noteEls[i].classList.add(s); },
         onDone: (res) => {
           const pct = Math.round(res.score * 100);
-          api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: `Timing score ${pct}%. ${res.summary}` });
-          api.actions([{ label: 'Hear it', fn: hearIt }]);
+          if (!tried) { tried = true; api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: `Timing score ${pct}%. ${res.summary}` }); }
+          else api.say(`Practice run: ${pct}%. ${res.summary} (Your first try is the one that counts.)`, res.score >= 0.85 ? 'good' : 'bad');
+          api.actions([{ label: 'Try again with the click', primary: true, fn: () => ui.start() }, { label: 'Hear it', fn: hearIt }]);
         },
       });
+      let tried = false;
       function hearIt() {
         const c = api.Sound.ensure(); const t0 = c.currentTime + 0.15; const sec = 60 / bpm;
         for (let b = 0; b < st.n * st.bpb; b++) api.Sound.click(t0 + b * sec, b % st.bpb === 0);
@@ -900,10 +903,12 @@
         mark: (n, s) => { if (n !== null && noteEls[n]) noteEls[n].classList.add(s); },
         onDone: (res) => {
           const pct = Math.round(res.score * 100);
-          api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: `Score ${pct}%. ${res.summary} Green = right note on time, amber = right note but early/late, red = wrong note, grey = missed.` });
-          api.actions([{ label: 'Practise it slowly (no clock)', fn: slow }]);
+          if (!tried) { tried = true; api.finish({ correct: res.score >= 0.85, score: res.score, manual: true, note: `Score ${pct}%. ${res.summary} Green = right note on time, amber = right note but early/late, red = wrong note, grey = missed.` }); }
+          else api.say(`Practice run: ${pct}%. ${res.summary} (Your first try is the one that counts.)`, res.score >= 0.85 ? 'good' : 'bad');
+          api.actions([{ label: 'Try again with the click', primary: true, fn: () => { if (stepOff) { stepOff(); stepOff = null; } ui.start(); } }, { label: 'Practise it slowly (no clock)', fn: slow }]);
         },
       });
+      let tried = false;
       function slow() {
         if (stepOff) stepOff();
         noteEls.forEach((g) => g.classList.remove('ok', 'bad', 'early', 'late', 'miss', 'cur'));

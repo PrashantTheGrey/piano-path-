@@ -98,24 +98,24 @@
       const playable = notes.filter((n) => !n.rest);
       let extras = 0;
       let stopped = false;
+      const taps = [];
+      // Match a tap at beat position b to the best open note (earliest in-window; same pitch preferred).
+      const match = (list, b, midi) => {
+        const cands = list.filter((n) => !n.status && b - n.beat >= -0.4 && b - n.beat <= Math.max(0.4, Math.min(0.6, n.dur * 0.6)));
+        if (!cands.length) return null;
+        const pool = o.pitched && cands.some((n) => n.midi === midi) ? cands.filter((n) => n.midi === midi) : cands;
+        const best = pool.find((n) => Math.abs(b - n.beat) <= 0.22) || pool[0];
+        const d = b - best.beat;
+        best.status = o.pitched && midi !== best.midi ? 'bad' : Math.abs(d) <= 0.22 ? 'ok' : d < 0 ? 'early' : 'late';
+        return best;
+      };
       const off = PP.Input.on((ev) => {
         if (ev.type !== 'on' || stopped) return;
         const b = beatAt(ev.t);
-        // open notes whose window contains this tap, earliest first
-        const cands = playable.filter((n) => {
-          if (n.status) return false;
-          const d = b - n.beat;
-          return d >= -0.4 && d <= Math.max(0.4, Math.min(0.6, n.dur * 0.6));
-        });
-        let best = null;
-        if (cands.length) {
-          const pool = o.pitched && cands.some((n) => n.midi === ev.midi) ? cands.filter((n) => n.midi === ev.midi) : cands;
-          best = pool.find((n) => Math.abs(b - n.beat) <= 0.22) || pool[0];
-        }
-        if (!best) { if (b > -0.5 && b < total + 0.5) extras++; return; }
-        const pitchOk = !o.pitched || ev.midi === best.midi;
-        const d = b - best.beat;
-        best.status = !pitchOk ? 'bad' : Math.abs(d) <= 0.22 ? 'ok' : d < 0 ? 'early' : 'late';
+        if (b <= -0.5 || b >= total + 0.75) return;
+        taps.push({ b, midi: ev.midi, vel: ev.vel, src: ev.src });
+        const best = match(playable, b, ev.midi);
+        if (!best) { extras++; return; }
         best.vel = ev.vel; best.src = ev.src;
         o.onMark(best.i, best.status);
       });
@@ -131,16 +131,40 @@
       raf = requestAnimationFrame(tick);
       function finish() {
         stopped = true; off(); cancelAnimationFrame(raf); silence();
-        for (const n of playable) if (!n.status) { n.status = 'miss'; o.onMark(n.i, 'miss'); }
+        for (const n of playable) if (!n.status) n.status = 'miss';
+        const credit = (list) => list.reduce((s, n) => s + (n.status === 'ok' ? 1 : n.status === 'early' || n.status === 'late' ? 0.6 : 0), 0);
+        // A steady offset (usually sound delay from Bluetooth speakers or headphones) is removed before scoring.
+        let shiftNote = '';
+        const devs = taps.map((t) => {
+          let best = null;
+          for (const n of playable) { if (o.pitched && n.midi !== t.midi) continue; const d = t.b - n.beat; if (best === null || Math.abs(d) < Math.abs(best)) best = d; }
+          return best;
+        }).filter((d) => d !== null && Math.abs(d) < 0.75).sort((a, b) => a - b);
+        if (devs.length >= Math.max(3, playable.length * 0.5)) {
+          const med = devs[Math.floor(devs.length / 2)];
+          if (Math.abs(med) > 0.12) {
+            const trial = playable.map((n) => ({ ...n, status: null }));
+            let ex = 0;
+            taps.forEach((t) => { const m = match(trial, t.b - med, t.midi); if (m) { m.vel = t.vel; m.src = t.src; } else ex++; });
+            trial.forEach((n) => { if (!n.status) n.status = 'miss'; });
+            if (credit(trial) - 0.25 * ex > credit(playable) - 0.25 * extras) {
+              trial.forEach((n, k) => Object.assign(playable[k], { status: n.status, vel: n.vel, src: n.src }));
+              extras = ex;
+              shiftNote = ` You played steadily about ${Math.round(Math.abs(med) * beatMs)} ms ${med > 0 ? 'after' : 'before'} the click (usually sound delay from Bluetooth speakers or headphones), so that delay was taken out of the score. Settings → Timing calibration fixes it for good.`;
+            }
+          }
+        }
+        if (o.onReset) o.onReset();
+        playable.forEach((n) => o.onMark(n.i, n.status));
         const c = (s) => playable.filter((n) => n.status === s).length;
-        const credit = c('ok') + 0.6 * (c('early') + c('late'));
-        const score = playable.length ? Math.max(0, (credit - 0.5 * extras) / playable.length) : 0;
+        const penalty = Math.min(0.25, (0.25 * extras) / Math.max(1, playable.length));
+        const score = playable.length ? Math.max(0, credit(playable) / playable.length - penalty) : 0;
         const parts = [`${c('ok')} of ${playable.length} notes right and on time`];
         if (c('early') + c('late')) parts.push(`${c('early')} early, ${c('late')} late`);
         if (c('bad')) parts.push(`${c('bad')} wrong note${c('bad') > 1 ? 's' : ''}`);
         if (c('miss')) parts.push(`${c('miss')} missed`);
         if (extras) parts.push(`${extras} extra`);
-        o.onDone({ score, summary: parts.join(' · ') + '.', notes: playable });
+        o.onDone({ score, summary: parts.join(' · ') + '.' + shiftNote, notes: playable });
       }
       return { stop() { if (!stopped) { stopped = true; off(); cancelAnimationFrame(raf); silence(); } } };
     },
