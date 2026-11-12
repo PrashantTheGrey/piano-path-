@@ -681,6 +681,10 @@
   function renderSheet() {
     const st = PP.Input.status;
     const btOk = PP.Input.btSupported();
+    const desktop = !/Android|iPhone|iPad/i.test(navigator.userAgent);
+    const noBt = navigator.brave
+      ? 'Brave turns Bluetooth off for websites. Open this page in Google Chrome or Microsoft Edge instead (or turn on “Web Bluetooth API” at brave://flags and restart Brave).'
+      : desktop ? 'This browser can’t use Bluetooth. Open this page in Google Chrome or Microsoft Edge.' : 'Bluetooth isn’t available here. Use Chrome on Android and open the app from its https:// address.';
     const midiOk = PP.Input.midiSupported();
     $('#sheet-body').innerHTML = `
       <div class="conn-state ${st.kind}">
@@ -701,7 +705,8 @@
             <button class="btn ghost sm" id="c-bt-all" ${btOk ? '' : 'disabled'}>Show all devices</button>
             ${st.kind === 'bt' ? '<button class="btn ghost sm" id="c-bt-off">Disconnect</button>' : ''}
           </div>
-          ${btOk ? '' : '<p class="small bad-text">Bluetooth isn’t available here. Use Chrome on Android and open the app from its https:// address.</p>'}
+          ${btOk ? '' : `<p class="small bad-text">${noBt}</p>`}
+          <p class="small bad-text" id="c-bt-off-msg" hidden>Bluetooth is switched off on this device. Turn it on in the system settings, then try again.</p>
         </div>
         <div class="copt">
           <h3>USB cable</h3>
@@ -715,10 +720,11 @@
       </div>
       <p class="feedback" id="c-msg"></p>`;
     const msg = (t, tone) => { const m = $('#c-msg'); m.textContent = t; m.className = 'feedback ' + (tone || ''); };
+    if (btOk && navigator.bluetooth.getAvailability) navigator.bluetooth.getAvailability().then((ok) => { const w = $('#c-bt-off-msg'); if (w) w.hidden = ok; }).catch(() => {});
     const bt = async (all) => {
       try { PP.Sound.ensure(); msg('Looking for your piano…', 'info'); await PP.Input.connectBluetooth(all); msg('Connected. Play a key to check.', 'good'); setTimeout(closeSheet, 900); }
       catch (e) {
-        if (e && e.name === 'NotFoundError') msg(all ? 'No device chosen.' : 'No Bluetooth MIDI piano found. Check its Bluetooth is on, or try “Show all devices”.', 'bad');
+        if (e && e.name === 'NotFoundError') msg(all ? 'No device chosen.' : `No Bluetooth MIDI piano chosen or found. Check that: the piano’s Bluetooth MIDI is switched on (see its manual); it isn’t connected to another phone, tablet or app, since Bluetooth MIDI talks to one device at a time; and it isn’t paired in ${desktop ? 'Windows' : 'Android'} Bluetooth settings (remove it there if it is). Then try again, or use “Show all devices”.${desktop ? ' On a computer, a USB cable is the most reliable option.' : ''}`, 'bad');
         else if (e && e.name === 'SecurityError') msg('Chrome blocked Bluetooth here. Open the app from its https:// address in Chrome (not inside another app).', 'bad');
         else msg((e && e.message) || 'Couldn’t connect.', 'bad');
         if (PP.Input.status.kind === 'connecting') PP.Input.setStatus({ kind: 'none' });

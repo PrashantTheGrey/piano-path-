@@ -1,5 +1,5 @@
 /* Piano Path service worker: makes the app open offline once it has been loaded. */
-const CACHE = 'pianopath-v3';
+const CACHE = 'pianopath-v4';
 const CORE = ['./', 'index.html', 'js/music.js', 'js/input.js', 'js/lessons.js', 'js/advanced.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
