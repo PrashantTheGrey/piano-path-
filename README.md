@@ -14,7 +14,7 @@ No piano nearby? Use the on-screen keys, or on a laptop the keys `A W S E D F T 
 
 ## What's in it
 
-19 skills in five strands (ear; keys, scales and chords; reading; sight-reading and playing by ear; repertoire), 96 stages from beginner to early-intermediate. Intermediate stages (marked in amber) include two-octave and hands-together scales, arpeggios, sixteenths, triplets and 6/8, hands-together sight-reading with dynamics, accompanying a tune by ear, and a piece-learning mode (hands separately, loop bars, wait-for-me, automatic tempo steps, MusicXML import). Tap a locked stage number to take a placement test.
+19 skills in five strands (ear; keys, scales and chords; reading; sight-reading and playing by ear; repertoire), 107 stages from beginner to early-intermediate. Intermediate stages (marked in amber) include two-octave and hands-together scales, arpeggios, sixteenths, triplets and 6/8, hands-together sight-reading with dynamics, accompanying a tune by ear, and a piece-learning mode (hands separately, loop bars, wait-for-me, automatic tempo steps, MusicXML import). Tap a locked stage number to take a placement test.
 
 ## How it teaches
 
