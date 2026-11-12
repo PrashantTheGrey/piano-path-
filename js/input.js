@@ -96,18 +96,37 @@
     },
     async btConnectGatt() {
       const device = this.btDevice;
-      const server = await device.gatt.connect();
-      let svc;
+      let ch = null, lastErr = null, step = '';
+      this._connecting = true;
       try {
-        svc = await server.getPrimaryService(BLE_MIDI_SERVICE);
-      } catch (e) {
-        throw new Error('“' + (device.name || 'This device') + '” doesn’t offer Bluetooth MIDI. Check that the piano’s Bluetooth MIDI is switched on (some pianos have separate Bluetooth audio and MIDI).');
+        // Windows often drops the first BLE connection attempt, so try a few times.
+        for (let attempt = 1; attempt <= 4 && !ch; attempt++) {
+          try {
+            step = 'connecting';
+            const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
+            step = 'finding the MIDI service';
+            const svc = await server.getPrimaryService(BLE_MIDI_SERVICE);
+            step = 'opening the MIDI channel';
+            const c = await svc.getCharacteristic(BLE_MIDI_CHAR);
+            if (this.btChar) this.btChar.removeEventListener('characteristicvaluechanged', this._btHandler);
+            this._btHandler = this._btHandler || ((e) => this.parseBle(e.target.value));
+            c.addEventListener('characteristicvaluechanged', this._btHandler);
+            step = 'starting to receive notes';
+            await c.startNotifications();
+            ch = c;
+          } catch (e) {
+            lastErr = e;
+            if (this.btManualDisconnect) break;
+            try { if (device.gatt.connected) device.gatt.disconnect(); } catch (x) { /* ignore */ }
+            await new Promise((r) => setTimeout(r, 800 * attempt));
+          }
+        }
+      } finally { this._connecting = false; }
+      if (!ch) {
+        const err = new Error(`Couldn’t connect to “${device.name || 'the piano'}” — it failed while ${step} (${(lastErr && (lastErr.message || lastErr.name)) || 'unknown error'}).`);
+        err.step = step;
+        throw err;
       }
-      const ch = await svc.getCharacteristic(BLE_MIDI_CHAR);
-      if (this.btChar) this.btChar.removeEventListener('characteristicvaluechanged', this._btHandler);
-      this._btHandler = this._btHandler || ((e) => this.parseBle(e.target.value));
-      ch.addEventListener('characteristicvaluechanged', this._btHandler);
-      await ch.startNotifications();
       // Some devices only start sending after a read.
       try { await ch.readValue(); } catch (e) { /* optional */ }
       this.btChar = ch;
@@ -117,6 +136,7 @@
     },
     onBtDisconnected() {
       this.clearHeld('bt');
+      if (this._connecting) return; // the connect loop handles its own retries
       if (this.btManualDisconnect || !this.btDevice) { this.setStatus({ kind: 'none' }); return; }
       if (this.btRetries >= 5) {
         this.setStatus({ kind: 'none', msg: 'Lost the Bluetooth connection. Check the piano is on and nearby, then connect again.' });

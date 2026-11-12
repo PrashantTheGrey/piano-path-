@@ -726,7 +726,7 @@
       catch (e) {
         if (e && e.name === 'NotFoundError') msg(all ? 'No device chosen.' : `No Bluetooth MIDI piano chosen or found. Check that: the piano’s Bluetooth MIDI is switched on (see its manual); it isn’t connected to another phone, tablet or app, since Bluetooth MIDI talks to one device at a time; and it isn’t paired in ${desktop ? 'Windows' : 'Android'} Bluetooth settings (remove it there if it is). Then try again, or use “Show all devices”.${desktop ? ' On a computer, a USB cable is the most reliable option.' : ''}`, 'bad');
         else if (e && e.name === 'SecurityError') msg('Chrome blocked Bluetooth here. Open the app from its https:// address in Chrome (not inside another app).', 'bad');
-        else msg((e && e.message) || 'Couldn’t connect.', 'bad');
+        else msg(((e && e.message) || 'Couldn’t connect.') + (e && e.step && desktop ? ' On Windows some pianos only send notes after they’re paired: open Settings → Bluetooth & devices → Add device → Bluetooth, choose the piano, then come back here and press Find my piano again.' : e && e.step ? ' Switch the piano’s Bluetooth off and on, then try again.' : ''), 'bad');
         if (PP.Input.status.kind === 'connecting') PP.Input.setStatus({ kind: 'none' });
       }
     };
